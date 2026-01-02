@@ -1,0 +1,10 @@
+# Object files
+*.o
+
+# Executables
+*.exe
+client
+client_exe.exe
+
+# VS Code settings (optional)
+.vscode/
