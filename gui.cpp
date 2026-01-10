@@ -244,7 +244,7 @@ Gtk::HBox* hbox_position = Gtk::manage(new Gtk::HBox(false,20));
         m_bouton_go.signal_clicked().connect([this]() {
 
             try {
-                a_x_cible = std::stoi(m_entry_dx.get_text());
+                a_x_cible = std::stod(m_entry_dx.get_text());
                 b_y_cible = std::stoi(m_entry_dy.get_text());
 
                 std::cout << "Déplacement demandé : X=" << a_x_cible << " Y=" << b_y_cible << std::endl;

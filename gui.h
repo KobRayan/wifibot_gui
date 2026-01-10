@@ -18,8 +18,8 @@ class Gui : public Gtk::Window
 {
 private:
 	bool time_out();
-	int a_x_cible;
-    int b_y_cible;
+	double a_x_cible;
+    double b_y_cible;
     Gtk::Label m_label_dx;
     Gtk::Label m_label_dy;
     Gtk::Entry m_entry_dx;

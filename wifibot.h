@@ -15,6 +15,7 @@
 #define TICK_IN_REVOLUTION 336.0f	
 #define DIAMETRE_ROUE 0.14f				// en m
 #define L_CHASSIS 0.165f				// en m
+#define DISTANCE_LIMITE 0.02f
 //largeur = 41, et sans les roues 25 et donc 2L = 33
 
 class Wifibot {
@@ -46,7 +47,7 @@ public:
 	void deplacement(double x_cible, double y_cible);
 	void deplacement_global(double x_cible, double y_cible);
 
-		bool isFirstConnected;
+	bool isFirstConnected; // pour 'caler' les valeurs des codeurs à 0 dans l'interface graphique et nos calculs
 	
 
 	short speed_d;
@@ -57,9 +58,7 @@ public:
 
 	// Capteurs IR en cm
     float position_g;
-    float position_deux;
     float position_d;
-    float position_quatre;
 
       	
     long odo_g;
@@ -74,7 +73,7 @@ public:
 	// La position (x,y) est sockée en m
     float x, y, theta;
     float v_g, v_d, vitesse, omega;
-	// on pouvait encore utiliser std::atomic pour x et y
+	// on pouvait encore utiliser std::atomic pour x, y et theta
 
 	// gêrer lecture et ecriter de en_mouvement en meme temps sans corrompre la donnée
 	std::atomic<bool> en_mouvement;
@@ -85,6 +84,8 @@ private:
 	void run_receive();
 	short crc16(unsigned char*,int);
 	void updatePosition();
+
+	// pour caler les codeurs à 0 dans la gui
 	long init_odo_g;
 	long init_odo_d;
 

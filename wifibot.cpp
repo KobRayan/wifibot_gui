@@ -19,9 +19,7 @@ speed_g(0),
 battery(0.0f),
 battery_pourcentage(0.0f),
 position_g(0.0f),
-position_deux(0.0f),
 position_d(0.0f),
-position_quatre(0.0f),
 odo_g(0),
 odo_d(0),
 odo_g_prev(0),
@@ -143,7 +141,7 @@ void Wifibot::run_send(){
 
 //run receive**************************************************************************
 void Wifibot::run_receive() {
-	// 1. On déclare en UNSIGNED directement. C'est la bonne pratique.
+	// On déclare en UNSIGNED directement. C'est la bonne pratique.
 	unsigned char buf[21]; 
 	short crc_receive;
 	
@@ -177,45 +175,35 @@ void Wifibot::run_receive() {
 			
 			
 			float tension_un     = (float)(buf[3]  / 255.0f) * 3.3f;
-			//float tension_deux   = (float)(buf[4]  / 255.0f) * 3.3f;
 			float tension_trois  = (float)(buf[11] / 255.0f) * 3.3f;
-			//float tension_quatre = (float)(buf[12] / 255.0f) * 3.3f;
 			
 			// fonction distance = 62.621 * x^(-1.113)
 			if(tension_un>0.05) position_g = 62.621*pow(tension_un,-1.113);
 			if(tension_trois>0.05) position_d  = 62.621*pow(tension_trois ,-1.113);
 			// pour eviter de diviser par 0
 			
-			
-			// 336 tics
+
 			
 			odo_g = (long)((int)(buf[5] | (buf[6] << 8) | (buf[7] << 16) | (buf[8] << 24)));
 			odo_d = (long)((int)(buf[13] | (buf[14] << 8) | (buf[15] << 16) | (buf[16] << 24)));
 			
-			/*odo_g = (long)buf[5]        | 
-			(long)buf[6] << 8   | 
-			(long)buf[7] << 16  | 
-			(long)buf[8] << 24;
-			
-			odo_d = (long)buf[13]       | 
-			(long)buf[14] << 8  | 
-			(long)buf[15] << 16 | 
-			(long)buf[16] << 24;*/
-			
+
+			// passer d'un numero de codeur bizzare à 0 dans le gui quand on demare
+
 			if(isFirstConnected){
 				init_odo_d = odo_d;
 				init_odo_g = odo_g;
 				
-				isFirstConnected = false;
+				isFirstConnected = false; // cette opération n'est executé qu'une seule fois pendant le premier paquet recu. equivalent au static
 			}
-			odo_g -= init_odo_g;
+			odo_g -= init_odo_g; 
 			odo_d -= init_odo_d;
 			
 			updatePosition();
 			
 		}
 		
-		std::this_thread::sleep_for(std::chrono::milliseconds(LOOP_TIME));
+		//std::this_thread::sleep_for(std::chrono::milliseconds(LOOP_TIME));
 	}
 }
 
@@ -314,15 +302,15 @@ void Wifibot::updatePosition()
 	x += vitesse * cos(theta) * LOOP_TIME_F;
 	y += vitesse * sin(theta) * LOOP_TIME_F;
 	
-	if (theta > PI) theta -= 2 * PI;
-	else if (theta < -PI) theta += 2 * PI;
+	if (theta > 1*PI) theta -= 2 * PI;  //2.1 pi pour une marge d'erreur
+	else if (theta < -1*PI) theta += 2 * PI;
 }
 
 void Wifibot::go_to(double dx, double dy)
 {
 	
 	if (en_mouvement) return;
-	// SI L'ANCIENNE POSITION N'EST PAS ATTEINTE, NE PAS CREER UN NOUVEAU THREAD
+	// SI L'ANCIENNE POSITION N'EST PAS ATTEINTE, NE PAS CREER UN NOUVEAU THREAD, BREAK LA METHODE
 	
 	if (m_p_thread_goto != NULL) {
 		if (m_p_thread_goto->joinable()) {
@@ -338,6 +326,7 @@ void Wifibot::go_to(double dx, double dy)
 	
 	en_mouvement = true;
 	// ajouter x_cible and y_cible au capture list [this, x_cible, y_cible] pour ne pas perdre ces variables quand la fonction arrête d'être appelée
+	// c'est ce qu'on appelle une fonction lambda
 	m_p_thread_goto = new thread([this, x_cible, y_cible]() { 
 		this->deplacement_global(x_cible, y_cible); 
 	});
@@ -350,6 +339,7 @@ void Wifibot::deplacement(double x_cible, double y_cible)
 {
 	
 	//double distance;
+	// FONCTIONNEMENT : LE ROBOT S4ARRETE QUAND IL DEPASSE LA CIBLE OVERSHOOT
 	
 	const double erreur = 0.005;   
 	//const double erreur_AXIS = 0.001;
@@ -374,7 +364,7 @@ void Wifibot::deplacement(double x_cible, double y_cible)
 	{
 		
 		
-		x_relatif = x_cible - x;
+		x_relatif = x_cible - x; // x relatif = ce que l'on ecrit sur le gui (dx)
 		
 		if (abs(x_relatif)<erreur){
 			stop();
@@ -394,7 +384,7 @@ void Wifibot::deplacement(double x_cible, double y_cible)
         }
        
 
-		usleep(LOOP_TIME); // 200 ms
+		std::this_thread::sleep_for(std::chrono::milliseconds(LOOP_TIME)) ; // 200 ms
 	}
 	en_mouvement = false; // Position atteinte okayy
 	cout << "Deplacement achevé." << endl;
@@ -402,45 +392,81 @@ void Wifibot::deplacement(double x_cible, double y_cible)
 }
 
 void Wifibot::deplacement_global(double x_cible, double y_cible) {
+	    
+	    // 1. Calcul de l'angle et de la distance à atteindre
+	    double dx = x_cible - x; // dx equivalent à ce qu'on valide le gui
+	    double dy = y_cible - y;
+
+	    const double erreur_x = 0.005; 
+	    double angle_desire = 0.0f;
+
+	// ************************** EVITER LA DIV§SION PAR 0
+	    if(abs(dx)<erreur_x && abs(dy)>erreur_x){
+	    	if(dy<-erreur_x) {
+	    		angle_desire = -PI/2;
+	    	}
+	    	else if (dy>erreur_x){
+	    		angle_desire = +PI/2;
+	    	}
+	    }
+	    else{
+	    		angle_desire = atan2(dy, dx); // on est okay ici
+	    }
+	    cout << angle_desire << endl;
     
-    // 1. Calcul de l'angle et de la distance à atteindre
-    double dx = x_cible - x;
-    double dy = y_cible - y;
-    double angle_desire = atan2(dy, dx);
     double distance_restante = sqrt(dx*dx + dy*dy);
+   
+    double prev_angle = angle_desire - theta; // pour l'overshoot
     
     // ********************** PHASE ALIGNEMENT
     // On tourne tant qu'on n'est pas aligné (à 0.05 radian près par exemple)
-    while (abs(angle_desire - theta) > 0.05) {
+    while (abs(angle_desire - theta) > 0.02) {
         
-       
+              
         double erreur_angle = angle_desire - theta;
-        // Normalisation entre -PI et PI
-        while (erreur_angle > PI) erreur_angle -= 2*PI;
-        while (erreur_angle < -PI) erreur_angle += 2*PI;
+        cout << erreur_angle << endl;
 
-        if (erreur_angle > 0) {
-           m_order.set_order(-10,10);
-        } else {
-            m_order.set_order(10,-10);
+        // Normalisation entre -PI et PI
+        /*while (erreur_angle > PI) erreur_angle -= 2*PI;
+        while (erreur_angle < -PI) erreur_angle += 2*PI;*/
+
+        if (erreur_angle > 0.005) {
+           m_order.set_order(-5,5);
+        } else if (erreur_angle < -0.005){
+            m_order.set_order(5,-5);
         }
-        usleep(LOOP_TIME); // 50ms 
+
+		
+			// SI on dépasse l'angle, on s'arrête, on sert de la boucle
+	    	if (abs(erreur_angle) > abs(prev_angle) ){
+	       	 break; // equivalent à sortir de la boucle quand position atteinte.
+	        }
+	     prev_angle = erreur_angle;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(LOOP_TIME)) ;
     }
+    //sortie de la boucle
     stop(); 
-    usleep(200000); // Stabilisation
+   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
 
     // ************** PHASE AVANCER
-    while (distance_restante > 0.05) { // Tant qu'on est à plus de 5cm
+    double prev_distance = distance_restante;
+    while (distance_restante > DISTANCE_LIMITE) { // Tant qu'on est à plus de DISTANCE_LIMITE cm
         
         dx = x_cible - x;
         dy = y_cible - y;
         distance_restante = sqrt(dx*dx + dy*dy);
         
+        // SI on dépasse la distance, on s'arrête, on sert de la boucle
+    	if (distance_restante > prev_distance) {
+       	 break; // equivalent à sortir de la boucle quand position atteinte.
+    }
+   		prev_distance = distance_restante;
+    	    
+        m_order.set_order(10,10);
         
-        m_order.set_order(20,20);
-        
-        usleep(LOOP_TIME);
+       std::this_thread::sleep_for(std::chrono::milliseconds(LOOP_TIME));
     }
 
     stop(); 
